@@ -1,6 +1,15 @@
 package org.kairosdb.telegraf;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.inject.Inject;
+import com.google.inject.name.Named;
+import org.apache.commons.lang3.StringUtils;
+import org.kairosdb.core.datapoints.LongDataPoint;
+import org.kairosdb.eventbus.FilterEventBus;
+import org.kairosdb.eventbus.Publisher;
+import org.kairosdb.events.DataPointEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,15 +19,33 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 @Path("api/v1/telegraf")
 public class TelegrafResource
 {
     private static final Logger logger = LoggerFactory.getLogger(TelegrafResource.class);
 
-    public TelegrafResource()
+    private static final String METRIC_PREFIX_PROP = "kairosdb.plugin.telegraf.prefix";
+    private static final String METRIC_INGESTION_COUNT = "kairosdb.telegraf.ingest_count";
+    private static final String METRIC_EXCEPTIONS = "kairosdb.telegraf.exception_count";
+
+    private final Publisher<DataPointEvent> dataPointPublisher;
+    private final String metricPrefix;
+    private final String host;
+
+    @Inject
+    public TelegrafResource(FilterEventBus eventBus, @Named(METRIC_PREFIX_PROP) String metricPrefix) throws UnknownHostException
     {
-        logger.info("**************** Starting telegraf plugin");
+        checkNotNull(eventBus, "eventBus must not be null");
+        this.metricPrefix = metricPrefix;
+        host = InetAddress.getLocalHost().getHostName();
+        dataPointPublisher = eventBus.createPublisher(DataPointEvent.class);
     }
 
 //    @POST
@@ -35,34 +62,83 @@ public class TelegrafResource
 //        return null;
 //    }
 //
+
+    // todo handle gzip
+    // todo how to increment ingestion count
+
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
-    @Produces(MediaType.WILDCARD)
+    @Produces(MediaType.WILDCARD) // todo what should this be?
     @Path("/write")
     public Response write(String data)
     {
+        List<String> errors = new ArrayList<>();
         try {
-            logger.info("*************** in write");
-            logger.info(data);
-
             InfluxParser parser = new InfluxParser();
             String[] lines = data.split("\n");
             for (String line : lines) {
-                ImmutableList<Metric> metrics = parser.parseLine(line);
+                try
+                {
+                    ImmutableList<Metric> metrics = parser.parseLine(line);
+                    for (Metric metric : metrics)
+                    {
+                        publishMetric(metric);
+                    }
+                }
+                catch (ParseException e)
+                {
+                    String msg = "Failed to parse '" + line + "' because " + e.getMessage();
+                    logger.error(msg);
+                    errors.add(msg);
+                    publishInternalMetric(METRIC_EXCEPTIONS, 1, "exception", e.getMessage());
+                }
             }
         }
-        catch(ParseException e)
-        {
-            // todo
+        catch (Throwable e) {
+            logger.error("Error processing request: " + data, e);
+            publishInternalMetric(METRIC_EXCEPTIONS, 1, "exception", e.getMessage());
 
+            String errorMessage = "{\"error\": " + StringUtils.join(errors, ";") + "}";
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
         }
 
-        // todo add metric to event bus
-        return null;
+        publishInternalMetric(METRIC_INGESTION_COUNT, 1);
+        return Response.status(Response.Status.NO_CONTENT).build();
+    }
+
+    private void publishMetric(Metric metric)
+    {
+        String metricName = metric.getName();
+        if (!Strings.isNullOrEmpty(metricPrefix)){
+            metricName = metricPrefix + metricName;
+        }
+        dataPointPublisher.post(new DataPointEvent(metricName, metric.getTags(), metric.getDataPoint()));
+    }
+
+    private void publishInternalMetric(String metricName, long value)
+    {
+        publishInternalMetric(metricName, value, null, null);
+    }
+
+    private void publishInternalMetric(String metricName, long value, String tagName, String tagValue)
+    {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Publishing metric " + metricName + " with value of " + value);
+        }
+
+        ImmutableSortedMap<String, String> tags;
+        if (!Strings.isNullOrEmpty(tagName)) {
+            tags = ImmutableSortedMap.of("host", this.host, tagName, tagValue);
+        }
+        else {
+            tags = ImmutableSortedMap.of("host", this.host);
+        }
+
+        dataPointPublisher.post(new DataPointEvent(metricName, tags,
+              new LongDataPoint(System.currentTimeMillis(), value)));
     }
 
 
-    // todo prefix
 
     // example Data
 //    mem,host=jsabin-desktop available_percent=27.9568771251547,low_free=0i,write_back=0i,write_back_tmp=0i,total=16773103616i,active=10523770880i,wired=0i,shared=265183232i,available=4689235968i,committed_as=23970713600i,huge_pages_total=0i,high_free=0i,high_total=0i,swap_total=0i,vmalloc_total=35184372087808i,inactive=1226072064i,swap_free=0i,vmalloc_chunk=0i,free=1775583232i,buffered=309248000i,dirty=2842624i,huge_page_size=2097152i,huge_pages_free=0i,mapped=1069363200i,page_tables=115609600i,vmalloc_used=0i,cached=2995802112i,slab=399163392i,swap_cached=0i,used=11692470272i,used_percent=69.70964074201783,commit_limit=8386551808i,low_total=0i 1547510150000000000
