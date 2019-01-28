@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.kairosdb.core.datapoints.StringDataPoint;
 
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -53,6 +54,30 @@ public class InfluxParserTest
         assertMetric(metrics.get(1), "swap.used", expectedTags, expectedTimestamp, 1L);
         assertMetric(metrics.get(2), "swap.free", expectedTags, expectedTimestamp, 0L);
         assertMetric(metrics.get(3), "swap.used_percent", expectedTags, expectedTimestamp, 0L);
+    }
+
+    @Test
+    public void testSpaceInQuotes() throws ParseException
+    {
+        String line = "system,host=localhost uptime_format=\" 5:53\" 1547510150000000000";
+
+        ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost");
+        long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
+        ImmutableList<Metric> metrics = parser.parseLine(line);
+
+        assertThat(metrics.size(), equalTo(1));
+        assertMetric(metrics.get(0), "system.uptime_format", expectedTags, expectedTimestamp, " 5:53");
+    }
+
+    @Test
+    public void testUnterminatedDoubleQuote() throws ParseException
+    {
+        expectedEx.expect(ParseException.class);
+        expectedEx.expectMessage("Invalid syntax: unterminated double quote");
+
+        String line = "system,host=jsabin-desktop uptime_format=\"5:53 1547510150000000000";
+
+        parser.parseLine(line);
     }
 
     @Test
