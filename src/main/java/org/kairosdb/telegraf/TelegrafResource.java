@@ -1,6 +1,5 @@
 package org.kairosdb.telegraf;
 
-import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
@@ -19,6 +18,8 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -43,39 +44,48 @@ public class TelegrafResource
 	private static final String METRIC_EXCEPTIONS = "kairosdb.telegraf.exception_count";
 
 	private final Publisher<DataPointEvent> dataPointPublisher;
-	private final String metricPrefix;
 	private final String host;
 	private final InfluxParser parser;
 
+	@Inject(optional = true)
+	@Named(PROPERTY_PREFIX)
+	private String metricPrefix;
+
+
 	@Inject
-	public TelegrafResource(FilterEventBus eventBus,
-			@Named(PROPERTY_PREFIX) String metricPrefix)
+	public TelegrafResource(FilterEventBus eventBus)
 			throws UnknownHostException
 	{
 		checkNotNull(eventBus, "eventBus must not be null");
-		this.metricPrefix = metricPrefix;
 		host = InetAddress.getLocalHost().getHostName();
 		dataPointPublisher = eventBus.createPublisher(DataPointEvent.class);
 
 		parser = new InfluxParser();
 	}
 
-	@SuppressWarnings("UnstableApiUsage")
-	@POST
-	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@Consumes("application/gzip")
-	@Path("/write")
-	public Response writeGZip(InputStream gzip) throws IOException
+	public TelegrafResource(FilterEventBus eventBus, String metricPrefix)
+			throws UnknownHostException
 	{
-		return write(CharStreams.toString(new InputStreamReader(new GZIPInputStream(gzip), Charsets.UTF_8)));
+		this(eventBus);
+		this.metricPrefix = metricPrefix;
 	}
 
+	@SuppressWarnings("UnstableApiUsage")
 	@POST
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	@Path("/write")
-	public Response write(String data)
+	public Response write(@Context HttpHeaders httpheaders, InputStream stream)
+			throws IOException
 	{
+		List<String> requestHeader = httpheaders.getRequestHeader("Content-Encoding");
+		if (requestHeader != null && requestHeader.contains("gzip"))
+		{
+			stream = new GZIPInputStream(stream);
+		}
+
+		String data = CharStreams.toString(new InputStreamReader(stream));
+
 		List<String> errors = new ArrayList<>();
 		int success = 0;
 		int failed = 0;

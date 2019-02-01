@@ -20,5 +20,5 @@ diskio,host=jsabin-desktop,name=sdb read_time=85444i,write_bytes=1259773952i,wri
 diskio,host=jsabin-desktop,name=sdb2 write_bytes=0i,weighted_io_time=116i,iops_in_progress=0i,reads=2i,read_bytes=2048i,write_time=0i,io_time=116i,writes=0i,read_time=116i 1547510150000000000
 diskio,host=jsabin-desktop,name=sdb5 read_bytes=1564300288i,read_time=85104i,write_time=125700i,io_time=46980i,iops_in_progress=0i,reads=47318i,writes=28805i,write_bytes=1259773952i,weighted_io_time=210796i 1547510150000000000
 system,host=jsabin-desktop uptime=21223i 1547510150000000000
-system,host=jsabin-desktop uptime_format=" 5:53" 1547510150000000000
+system,host=jsabin-desktop uptime_format="7 days, 5:53" 1547510150000000000
 processes,host=jsabin-desktop blocked=0i,zombies=0i,stopped=0i,dead=0i,paging=0i,running=0i,sleeping=330i,total=330i,unknown=0i,total_threads=1570i,idle=0i 1547510150000000000

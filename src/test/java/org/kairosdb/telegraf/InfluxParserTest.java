@@ -59,14 +59,14 @@ public class InfluxParserTest
     @Test
     public void testSpaceInQuotes() throws ParseException
     {
-        String line = "system,host=localhost uptime_format=\" 5:53\" 1547510150000000000";
+        String line = "system,host=localhost uptime_format=\"7 days, 5:46\" 1548718010000000000";
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost");
-        long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
+        long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1548718010000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line);
 
         assertThat(metrics.size(), equalTo(1));
-        assertMetric(metrics.get(0), "system.uptime_format", expectedTags, expectedTimestamp, " 5:53");
+        assertMetric(metrics.get(0), "system.uptime_format", expectedTags, expectedTimestamp, "7 days, 5:46");
     }
 
     @Test

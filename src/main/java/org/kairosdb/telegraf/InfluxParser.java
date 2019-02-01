@@ -20,12 +20,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class InfluxParser
 {
+    @SuppressWarnings("Convert2MethodRef")
     public ImmutableList<Metric> parseLine(String line)
             throws ParseException
     {
         Builder<Metric> metrics = ImmutableList.builder();
 
-        String[] strings = parseComponents(line);
+        String[] strings = parseComponents(line, c -> Character.isWhitespace(c));
         if (strings.length < 1){
             return ImmutableList.of();
         }
@@ -41,7 +42,7 @@ public class InfluxParser
         ImmutableSortedMap.Builder<String, String> builder = ImmutableSortedMap.naturalOrder();
         for(int i = 1; i < nameAndTags.length; i++)
         {
-            String[] tag = nameAndTags[i].split("=");
+            String[] tag = parseComponents(nameAndTags[i], c -> c == '=');
             Utils.checkParsing(tag.length == 2 && !tag[0].isEmpty() && !tag[1].isEmpty(), "Invalid syntax. Invalid tag set.");
             builder.put(tag[0], tag[1]);
         }
@@ -55,9 +56,9 @@ public class InfluxParser
         }
 
         // Parse Field set
-        String[] fieldSets = strings[1].split(",");
+        String[] fieldSets = parseComponents(strings[1], c -> c == ',');
         for (String fieldSet : fieldSets) {
-            String[] field = fieldSet.split("=");
+            String[] field = parseComponents(fieldSet, c -> c == '=');
             Utils.checkParsing(field.length == 2 && !field[0].isEmpty() && !field[1].isEmpty(), "Invalid syntax. Invalid field set.");
 
             metrics.add(new Metric(metricName + "." + field[0], tags, parseValue(timestamp, field[1])));
@@ -66,7 +67,7 @@ public class InfluxParser
         return metrics.build();
     }
 
-    private String[] parseComponents(String line) throws ParseException
+    private String[] parseComponents(String line, Delimiter delimeter) throws ParseException
     {
         List<String> components = new ArrayList<>();
         String trimmedLine = line.trim();
@@ -78,7 +79,7 @@ public class InfluxParser
             {
                 startQuote = !startQuote;
             }
-            if (Character.isWhitespace(c) && !startQuote)
+            if (delimeter.isDelimeter(c) && !startQuote)
             {
                 if (builder.length() > 0)
                 {
@@ -126,5 +127,9 @@ public class InfluxParser
         {
             return new DoubleDataPoint(timestamp, Double.parseDouble(valueString));
         }
+    }
+
+    private interface Delimiter {
+        public boolean isDelimeter(char c);
     }
 }
