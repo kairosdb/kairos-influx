@@ -11,7 +11,6 @@ import org.kairosdb.core.datapoints.StringDataPoint;
 import org.kairosdb.eventbus.FilterEventBus;
 import org.kairosdb.eventbus.Publisher;
 import org.kairosdb.events.DataPointEvent;
-import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -19,12 +18,11 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -38,13 +36,17 @@ public class TelegrafResourceTest
 	private HttpHeaders mockHeaders;
 
 	private String host;
+	private InfluxParser parser;
+	private MetricWriter writer;
 
 	@Before
 	public void setup() throws UnknownHostException
 	{
 		MockitoAnnotations.initMocks(this);
 		when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
-		host = InetAddress.getLocalHost().getHostName();
+		host = "jsabin-desktop";
+		writer = new MetricWriter(mockEventBus, host);
+		parser = new InfluxParser(writer);
 	}
 
 	@SuppressWarnings("UnstableApiUsage")
@@ -55,7 +57,7 @@ public class TelegrafResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt").openStream();
 
-		TelegrafResource resource = new TelegrafResource(mockEventBus, "influxdb.");
+		TelegrafResource resource = new TelegrafResource(writer, parser, "influxdb.");
 
 		Response response = resource.write(mockHeaders, inputStream);
 
@@ -78,7 +80,7 @@ public class TelegrafResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt.gz").openStream();
 
-		TelegrafResource resource = new TelegrafResource(mockEventBus, "influxdb.");
+		TelegrafResource resource = new TelegrafResource(writer, parser, "influxdb.");
 
 		Response response = resource.write(mockHeaders, inputStream);
 
@@ -115,46 +117,5 @@ public class TelegrafResourceTest
 				argThat(new DataPointEventMatcher(new DataPointEvent(metricName,
 						tags,
 						new StringDataPoint(TimeUnit.NANOSECONDS.toMillis(timestamp), value)))));
-	}
-
-	private class DataPointEventMatcher implements ArgumentMatcher<DataPointEvent>
-	{
-		private DataPointEvent event;
-		private String errorMessage;
-
-		DataPointEventMatcher(DataPointEvent event)
-		{
-			this.event = event;
-		}
-
-		@Override
-		public boolean matches(DataPointEvent dataPointEvent)
-		{
-			if (!event.getMetricName().equals(dataPointEvent.getMetricName()))
-			{
-				errorMessage = "Metric names don't match: " + event.getMetricName() + " != " + dataPointEvent.getMetricName();
-				return false;
-			}
-			if (!event.getTags().equals(dataPointEvent.getTags()))
-			{
-				errorMessage = "Tags don't match: " + event.getTags() + " != " + dataPointEvent.getTags();
-				return false;
-			}
-			if (event.getDataPoint().getDoubleValue() != dataPointEvent.getDataPoint().getDoubleValue())
-			{
-				errorMessage = "Data points don't match: " + event.getDataPoint().getDoubleValue() + " != " + dataPointEvent.getDataPoint().getDoubleValue();
-				return false;
-			}
-			return true;
-		}
-
-		@Override
-		public String toString()
-		{
-			if (errorMessage != null) {
-				return errorMessage;
-			}
-			return "";
-		}
 	}
 }

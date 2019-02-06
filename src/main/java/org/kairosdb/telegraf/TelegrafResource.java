@@ -1,6 +1,5 @@
 package org.kairosdb.telegraf;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.io.CharStreams;
@@ -8,9 +7,6 @@ import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.apache.commons.lang3.StringUtils;
 import org.kairosdb.core.datapoints.LongDataPoint;
-import org.kairosdb.eventbus.FilterEventBus;
-import org.kairosdb.eventbus.Publisher;
-import org.kairosdb.events.DataPointEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,48 +21,40 @@ import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 @Path("api/v1/telegraf")
 public class TelegrafResource
 {
 	private static final Logger logger = LoggerFactory.getLogger(TelegrafResource.class);
 
-	private static final String PROPERTY_PREFIX = "kairosdb.plugin.telegraf.prefix";
+	private static final String PREFIX_PROP = "kairosdb.plugin.telegraf.prefix";
 
-	private static final String METRIC_INGESTION_COUNT = "kairosdb.telegraf.ingest_count";
-	private static final String METRIC_EXCEPTIONS = "kairosdb.telegraf.exception_count";
+	private static final String INGESTION_COUNT_METRIC = "kairosdb.telegraf.ingest_count";
+	private static final String EXCEPTIONS_METRIC = "kairosdb.telegraf.exception_count";
 
-	private final Publisher<DataPointEvent> dataPointPublisher;
-	private final String host;
 	private final InfluxParser parser;
+	private final MetricWriter writer;
 
 	@Inject(optional = true)
-	@Named(PROPERTY_PREFIX)
+	@Named(PREFIX_PROP)
 	private String metricPrefix;
 
-
 	@Inject
-	public TelegrafResource(FilterEventBus eventBus)
-			throws UnknownHostException
+	public TelegrafResource(MetricWriter writer, InfluxParser parser)
 	{
-		checkNotNull(eventBus, "eventBus must not be null");
-		host = InetAddress.getLocalHost().getHostName();
-		dataPointPublisher = eventBus.createPublisher(DataPointEvent.class);
-
-		parser = new InfluxParser();
+		this.writer = checkNotNull(writer, "writer must not be null");
+		this.parser = parser;
 	}
 
-	public TelegrafResource(FilterEventBus eventBus, String metricPrefix)
-			throws UnknownHostException
+	public TelegrafResource(MetricWriter writer, InfluxParser parser, String metricPrefix)
 	{
-		this(eventBus);
+		this(writer, parser);
 		this.metricPrefix = metricPrefix;
 	}
 
@@ -109,31 +97,26 @@ public class TelegrafResource
 					String msg = "Failed to parse '" + line + "' because " + e.getMessage();
 					logger.error(msg);
 					errors.add(msg);
-					publishInternalMetric(METRIC_EXCEPTIONS, 1, "exception", e.getMessage());
+					publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
 				}
 			}
 		}
 		catch (Throwable e)
 		{
 			logger.error("Error processing request: " + data, e);
-			publishInternalMetric(METRIC_EXCEPTIONS, 1, "exception", e.getMessage());
+			publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
 
 			String errorMessage = "{\"error\": " + StringUtils.join(errors, ";") + "}";
 			return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
 		}
 
-		publishInternalMetric(METRIC_INGESTION_COUNT, success, failed);
+		publishInternalMetric(INGESTION_COUNT_METRIC, success, failed);
 		return Response.status(Response.Status.NO_CONTENT).build();
 	}
 
 	private void publishMetric(Metric metric)
 	{
-		String metricName = metric.getName();
-		if (!Strings.isNullOrEmpty(metricPrefix))
-		{
-			metricName = metricPrefix + metricName;
-		}
-		dataPointPublisher.post(new DataPointEvent(metricName, metric.getTags(), metric.getDataPoint()));
+		writer.write(isNullOrEmpty(metricPrefix) ? metric.getName() : metricPrefix + metric.getName(), metric.getTags(), metric.getDataPoint());
 	}
 
 	private void publishInternalMetric(String metricName, int success, int failed)
@@ -148,22 +131,6 @@ public class TelegrafResource
 
 	private void publishInternalMetric(String metricName, long value, String tagName, String tagValue)
 	{
-		if (logger.isDebugEnabled())
-		{
-			logger.debug("Publishing metric " + metricName + " with value of " + value);
-		}
-
-		ImmutableSortedMap<String, String> tags;
-		if (!Strings.isNullOrEmpty(tagName))
-		{
-			tags = ImmutableSortedMap.of("host", this.host, tagName, tagValue);
-		}
-		else
-		{
-			tags = ImmutableSortedMap.of("host", this.host);
-		}
-
-		dataPointPublisher.post(new DataPointEvent(metricName, tags,
-				new LongDataPoint(System.currentTimeMillis(), value)));
+		writer.write(metricName, ImmutableSortedMap.of(tagName, tagValue), new LongDataPoint(System.currentTimeMillis(), value));
 	}
 }

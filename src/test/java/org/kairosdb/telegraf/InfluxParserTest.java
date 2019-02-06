@@ -2,25 +2,50 @@ package org.kairosdb.telegraf;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.kairosdb.core.datapoints.LongDataPoint;
 import org.kairosdb.core.datapoints.StringDataPoint;
+import org.kairosdb.eventbus.FilterEventBus;
+import org.kairosdb.eventbus.Publisher;
+import org.kairosdb.events.DataPointEvent;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class InfluxParserTest
 {
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
-    private InfluxParser parser = new InfluxParser();
+    @Mock
+    private FilterEventBus mockEventBus;
+    @Mock
+    private Publisher<DataPointEvent> mockPublisher;
+
+    private String host;
+    private InfluxParser parser;
+    private MetricWriter writer;
+
+    @Before
+    public void setup()
+    {
+        MockitoAnnotations.initMocks(this);
+        when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
+        host = "jsabin-desktop";
+        writer = new MetricWriter(mockEventBus, host);
+        parser = new InfluxParser(writer);
+    }
 
     @Test
     public void testSuccess()
@@ -110,7 +135,7 @@ public class InfluxParserTest
             throws ParseException
     {
         expectedEx.expect(ParseException.class);
-        expectedEx.expectMessage("Invalid sytax. Measurement name was not specified.");
+        expectedEx.expectMessage("Invalid syntax. Measurement name was not specified.");
 
         String line = ",host=localhost,foo=bar total=0i";
 
@@ -190,7 +215,32 @@ public class InfluxParserTest
         parser.parseLine(line);
     }
 
-    // todo tags are optional
+    @Test
+    public void testDroppedMetricsAndTags() throws ParseException
+    {
+        parser.setupDroppedMetrics("swap.used.*");
+        parser.setupDroppedTags("foo");
+
+        String line = "swap,host=localhost,foo=bar total=true,used=True,free=f,used_percent=False 1547510150000000000";
+
+        ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost");
+        long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
+        ImmutableList<Metric> metrics = parser.parseLine(line);
+
+        assertThat(metrics.size(), equalTo(2));
+        assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 1L);
+        assertMetric(metrics.get(1), "swap.free", expectedTags, expectedTimestamp, 0L);
+        verifyMetric(InfluxParser.TAGS_DROPPED_METRIC, ImmutableSortedMap.of("host", host), 0, 1);
+        verifyMetric(InfluxParser.METRICS_DROPPED_METRIC, ImmutableSortedMap.of("host", host), 0, 2);
+    }
+
+    private void verifyMetric(String metricName, ImmutableSortedMap<String, String> tags, long timestamp, long value)
+    {
+        verify(mockPublisher).post(
+              argThat(new DataPointEventMatcher(new DataPointEvent(metricName,
+                    tags,
+                    new LongDataPoint(TimeUnit.NANOSECONDS.toMillis(timestamp), value)))));
+    }
 
     private void assertMetric(Metric actual, String expectedName, ImmutableSortedMap<String, String> expectedTags, long expectedTimestamp, long expectedValue)
     {
