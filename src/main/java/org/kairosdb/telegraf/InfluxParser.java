@@ -32,11 +32,11 @@ public class InfluxParser
 {
 	private static final Logger logger = LoggerFactory.getLogger(InfluxParser.class);
 
-	private static final String DROP_METRICS_PROP = "kairosdb.plugin.telegraf.dropMetrics.dropMetrics";
-	private static final String DROP_TAGS_PROP = "kairosdb.plugin.telegraf.dropMetrics.dropTags";
+	private static final String DROP_METRICS_PROP = "kairosdb.plugin.telegraf.dropMetrics";
+	private static final String DROP_TAGS_PROP = "kairosdb.plugin.telegraf.dropTags";
 
-	static final String METRICS_DROPPED_METRIC = "kairosdb.plugin.telegraf.metrics-dropped.count";
-	static final String TAGS_DROPPED_METRIC = "kairosdb.plugin.telegraf.tags-dropped.count";
+	static final String METRICS_DROPPED_METRIC = "kairosdb.telegraf.metrics-dropped.count";
+	static final String TAGS_DROPPED_METRIC = "kairosdb.telegraf.tags-dropped.count";
 
 	private final Set<Pattern> dropMetricsRegex = new HashSet<>();
 	private final Set<Pattern> dropTagsRegex = new HashSet<>();

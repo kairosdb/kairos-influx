@@ -35,5 +35,5 @@ The plugin writes these metrics to KairosDB:
 | ----------- | ---- | ----------- |
 | kairosdb.telegraf.ingest_count | status, host | This is the number of metrics ingested from Telegraf. Status is either "success" or "failed". Host is the name of the KairosDB host that reported the metric. |
 | kairosdb.telegraf.exception_count | exception, host | This is a count of exceptions when ingesting. The exception tag is the exception name. Host is the name of the KairosDB host that reported the metric. | 
-| kairosdb.plugin.telegraf.metrics-dropped.count | host | This is a count of the number of metrics (measurement + field name) dropped (ignored). Host is the name of the KairosDB host that reported the metric. |
-| kairosdb.plugin.telegraf.tags-dropped.count | host | This is a count of the number of tags dropped (ignored). Host is the name of the KairosDB host that reported the metric.|
+| kairosdb.telegraf.metrics-dropped.count | host | This is a count of the number of metrics (measurement + field name) dropped (ignored). Host is the name of the KairosDB host that reported the metric. |
+| kairosdb.telegraf.tags-dropped.count | host | This is a count of the number of tags dropped (ignored). Host is the name of the KairosDB host that reported the metric.|
