@@ -1,4 +1,4 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;

@@ -1,4 +1,4 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.inject.Inject;
@@ -6,12 +6,12 @@ import org.kairosdb.core.DataPoint;
 import org.kairosdb.eventbus.FilterEventBus;
 import org.kairosdb.eventbus.Publisher;
 import org.kairosdb.events.DataPointEvent;
+import org.kairosdb.util.Preconditions;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.kairosdb.util.Preconditions.checkNotNullOrEmpty;
 
 public class MetricWriter
 {
@@ -28,7 +28,7 @@ public class MetricWriter
     {
         checkNotNull(eventBus, "eventBus must not be null");
         dataPointPublisher = eventBus.createPublisher(DataPointEvent.class);
-        this.host = checkNotNullOrEmpty(host, "host must not be null or empty");
+        this.host = Preconditions.requireNonNullOrEmpty(host, "host must not be null or empty");
     }
 
     public void write(String metricName, DataPoint datapoint)

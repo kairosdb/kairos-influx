@@ -1,4 +1,4 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;

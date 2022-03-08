@@ -1,4 +1,4 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 import org.junit.Rule;
 import org.junit.Test;

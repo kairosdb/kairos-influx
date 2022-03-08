@@ -1,4 +1,4 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 public class Utils
 {

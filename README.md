@@ -1,14 +1,14 @@
-# telegraf-plugin
+# kairos-influx
 
 This KairosDB plugin takes metrics sent from [Telegraf](https://docs.influxdata.com/telegraf/) in the [InfluxDB Line Protocol format](https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/#syntax) and writes them to KairosDB.
-The plugin will accept gzipped and non-gzipped data from Telegraf.
+The plugin will accept gzipped and non-gzipped data from Telegraf or any other application that writes data to InfluxDB.
 
 # Configuration
 Here is a sample configuration for this plugin. 
 
 
 ```
-kairosdb.service.telegraf-plugin=org.kairosdb.telegraf.TelegrafModule
+kairosdb.service.telegraf-plugin=org.kairosdb.influxdb.TelegrafModule
 kairosdb.service_folder.telegraf-plugin=lib/telegraf
 
 kairosdb.plugin.telegraf.prefix=telegraph.

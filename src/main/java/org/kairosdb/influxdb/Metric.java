@@ -1,11 +1,11 @@
-package org.kairosdb.telegraf;
+package org.kairosdb.influxdb;
 
 import com.google.common.collect.ImmutableSortedMap;
 import org.kairosdb.core.DataPoint;
 
 import static com.google.common.base.Preconditions.checkState;
-import static org.kairosdb.util.Preconditions.checkNotNullOrEmpty;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.kairosdb.util.Preconditions.requireNonNullOrEmpty;
 
 
 public class Metric
@@ -16,7 +16,7 @@ public class Metric
 
     public Metric(String metricName, ImmutableSortedMap<String, String> tags, DataPoint dataPoint)
     {
-        name = checkNotNullOrEmpty(metricName, "metricName must not be null or empty");
+        name = requireNonNullOrEmpty(metricName, "metricName must not be null or empty");
         checkState(tags.size() > 0, "You must have at least one tag");
         this.tags = checkNotNull(tags, "tags must not be null");
         this.dataPoint = checkNotNull(dataPoint, "dataPoint must not be null");
