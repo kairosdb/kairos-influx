@@ -32,11 +32,11 @@ public class InfluxParser
 {
 	private static final Logger logger = LoggerFactory.getLogger(InfluxParser.class);
 
-	private static final String DROP_METRICS_PROP = "kairosdb.plugin.telegraf.dropMetrics";
-	private static final String DROP_TAGS_PROP = "kairosdb.plugin.telegraf.dropTags";
+	private static final String DROP_METRICS_PROP = "kairosdb.influx.dropMetrics";
+	private static final String DROP_TAGS_PROP = "kairosdb.influx.dropTags";
 
-	static final String METRICS_DROPPED_METRIC = "kairosdb.telegraf.metrics-dropped.count";
-	static final String TAGS_DROPPED_METRIC = "kairosdb.telegraf.tags-dropped.count";
+	static final String METRICS_DROPPED_METRIC = "kairosdb.influx.metrics-dropped.count";
+	static final String TAGS_DROPPED_METRIC = "kairosdb.influx.tags-dropped.count";
 
 	private final Set<Pattern> dropMetricsRegex = new HashSet<>();
 	private final Set<Pattern> dropTagsRegex = new HashSet<>();
@@ -61,7 +61,7 @@ public class InfluxParser
 	}
 
 	@SuppressWarnings("Convert2MethodRef")
-	public ImmutableList<Metric> parseLine(String line)
+	public ImmutableList<Metric> parseLine(String line, TimeUnit precision)
 			throws ParseException
 	{
 		int metricsDropped = 0;
@@ -107,7 +107,22 @@ public class InfluxParser
 		long timestamp = System.currentTimeMillis();
 		if (strings.length == 3)
 		{
-			timestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong(strings[2]));
+			long parsedTime = Long.parseLong(strings[2]);
+			switch (precision)
+			{
+				case NANOSECONDS:
+					timestamp = TimeUnit.NANOSECONDS.toMillis(parsedTime);
+					break;
+				case MICROSECONDS:
+					timestamp = TimeUnit.MICROSECONDS.toMillis(parsedTime);
+					break;
+				case MILLISECONDS:
+					timestamp = parsedTime;
+					break;
+				case SECONDS:
+					timestamp = TimeUnit.SECONDS.toMillis(parsedTime);
+					break;
+			}
 		}
 
 		// Parse Field set
@@ -184,28 +199,28 @@ public class InfluxParser
 		return components.toArray(new String[0]);
 	}
 
-	private DataPoint parseValue(long timestamp, String valueString)
+	private DataPoint parseValue(long timestamp, String valueString) throws ParseException
 	{
-		if (valueString.endsWith("i"))
-		{
-			String value = valueString.substring(0, valueString.length() - 1);
-			return new LongDataPoint(timestamp, Long.parseLong(value));
+		try {
+			if (valueString.endsWith("i")) {
+				String value = valueString.substring(0, valueString.length() - 1);
+				return new LongDataPoint(timestamp, Long.parseLong(value));
+			}
+			else if (valueString.startsWith("\"") && valueString.endsWith("\"")) {
+				return new StringDataPoint(timestamp, valueString.substring(1, valueString.length() - 1));
+			}
+			else if (valueString.equalsIgnoreCase("t") || valueString.equalsIgnoreCase("true")) {
+				return new LongDataPoint(timestamp, 1);
+			}
+			else if (valueString.equalsIgnoreCase("f") || valueString.equalsIgnoreCase("false")) {
+				return new LongDataPoint(timestamp, 0);
+			}
+			else {
+				return new DoubleDataPoint(timestamp, Double.parseDouble(valueString));
+			}
 		}
-		else if (valueString.startsWith("\"") && valueString.endsWith("\""))
-		{
-			return new StringDataPoint(timestamp, valueString.substring(1, valueString.length() - 1));
-		}
-		else if (valueString.equalsIgnoreCase("t") || valueString.equalsIgnoreCase("true"))
-		{
-			return new LongDataPoint(timestamp, 1);
-		}
-		else if (valueString.equalsIgnoreCase("f") || valueString.equalsIgnoreCase("false"))
-		{
-			return new LongDataPoint(timestamp, 0);
-		}
-		else
-		{
-			return new DoubleDataPoint(timestamp, Double.parseDouble(valueString));
+		catch (NumberFormatException nfe) {
+			throw new ParseException("Unable to parse field value: "+valueString);
 		}
 	}
 

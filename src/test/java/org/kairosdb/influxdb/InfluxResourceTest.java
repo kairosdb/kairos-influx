@@ -26,7 +26,7 @@ import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class TelegrafResourceTest
+public class InfluxResourceTest
 {
 	@Mock
 	private FilterEventBus mockEventBus;
@@ -57,9 +57,9 @@ public class TelegrafResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt").openStream();
 
-		TelegrafResource resource = new TelegrafResource(writer, parser, "influxdb.");
+		InfluxResource resource = new InfluxResource(writer, parser, "influxdb.");
 
-		Response response = resource.write(mockHeaders, inputStream);
+		Response response = resource.write(mockHeaders, "bucket", "org", "ns", inputStream);
 
 		assertThat(response.getStatus(), equalTo(204));
 
@@ -69,7 +69,7 @@ public class TelegrafResourceTest
 		verifyMetric("influxdb.system.uptime_format", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, " 5:53");
 
 		// Verify internal metric
-		verifyMetric("kairosdb.telegraf.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
+		verifyMetric("kairosdb.influx.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
 	}
 
 	@SuppressWarnings("UnstableApiUsage")
@@ -80,9 +80,9 @@ public class TelegrafResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt.gz").openStream();
 
-		TelegrafResource resource = new TelegrafResource(writer, parser, "influxdb.");
+		InfluxResource resource = new InfluxResource(writer, parser, "influxdb.");
 
-		Response response = resource.write(mockHeaders, inputStream);
+		Response response = resource.write(mockHeaders, "bucket", "org", "ns",  inputStream);
 
 		assertThat(response.getStatus(), equalTo(204));
 
@@ -92,7 +92,7 @@ public class TelegrafResourceTest
 		verifyMetric("influxdb.system.uptime_format", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, " 5:53");
 
 		// Verify internal metric
-		verifyMetric("kairosdb.telegraf.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
+		verifyMetric("kairosdb.influx.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
 	}
 
 	private void verifyMetric(String metricName, ImmutableSortedMap<String, String> tags, long timestamp, long value)

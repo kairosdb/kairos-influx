@@ -55,13 +55,55 @@ public class InfluxParserTest
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
-        ImmutableList<Metric> metrics = parser.parseLine(line);
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
         assertThat(metrics.size(), equalTo(4));
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
         assertMetric(metrics.get(1), "swap.used", expectedTags, expectedTimestamp, 0L);
         assertMetric(metrics.get(2), "swap.free", expectedTags, expectedTimestamp, "hello");
         assertMetric(metrics.get(3), "swap.used_percent", expectedTags, expectedTimestamp, 1L); // boolean converted to 0 or 1
+    }
+
+    @Test
+    public void testSeconds()
+            throws ParseException
+    {
+        String line = "swap,host=localhost,foo=bar total=5 154751015";
+
+        ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
+        long expectedTimestamp = TimeUnit.SECONDS.toMillis(Long.parseLong("154751015"));
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.SECONDS);
+
+        assertThat(metrics.size(), equalTo(1));
+        assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
+    }
+
+    @Test
+    public void testMicroSeconds()
+            throws ParseException
+    {
+        String line = "swap,host=localhost,foo=bar total=5 154751015000000000";
+
+        ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
+        long expectedTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.parseLong("154751015000000000"));
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.MICROSECONDS);
+
+        assertThat(metrics.size(), equalTo(1));
+        assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
+    }
+
+    @Test
+    public void testMilliSeconds()
+            throws ParseException
+    {
+        String line = "swap,host=localhost,foo=bar total=5 154751015000";
+
+        ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
+        long expectedTimestamp = Long.parseLong("154751015000");
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.MILLISECONDS);
+
+        assertThat(metrics.size(), equalTo(1));
+        assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
     }
 
     @Test
@@ -72,7 +114,7 @@ public class InfluxParserTest
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
-        ImmutableList<Metric> metrics = parser.parseLine(line);
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
         assertThat(metrics.size(), equalTo(4));
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 1L);
@@ -88,7 +130,7 @@ public class InfluxParserTest
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost");
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1548718010000000000"));
-        ImmutableList<Metric> metrics = parser.parseLine(line);
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
         assertThat(metrics.size(), equalTo(1));
         assertMetric(metrics.get(0), "system.uptime_format", expectedTags, expectedTimestamp, "7 days, 5:46");
@@ -102,7 +144,7 @@ public class InfluxParserTest
 
         String line = "system,host=jsabin-desktop uptime_format=\"5:53 1547510150000000000";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -113,7 +155,7 @@ public class InfluxParserTest
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost", "foo", "bar");
         long expectedTimestamp = System.currentTimeMillis();
-        ImmutableList<Metric> metrics = parser.parseLine(line);
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
         assertThat(metrics.get(0).getDataPoint().getTimestamp(), is(greaterThanOrEqualTo(expectedTimestamp)));
     }
@@ -127,7 +169,7 @@ public class InfluxParserTest
 
         String line = "swap,host=localhost,foo=bar";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -139,7 +181,7 @@ public class InfluxParserTest
 
         String line = ",host=localhost,foo=bar total=0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -151,7 +193,7 @@ public class InfluxParserTest
 
         String line = "swap,=localhost,foo=bar total=0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -163,7 +205,7 @@ public class InfluxParserTest
 
         String line = "swap,host=,foo=bar total=0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -175,7 +217,7 @@ public class InfluxParserTest
 
         String line = "swap,host-localhost,foo=bar total=0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
 
@@ -188,7 +230,7 @@ public class InfluxParserTest
 
         String line = "swap,host=localhost,foo=bar =0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -200,7 +242,7 @@ public class InfluxParserTest
 
         String line = "swap,host=localhost,foo=bar total=";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -212,7 +254,7 @@ public class InfluxParserTest
 
         String line = "swap,host=localhost,foo=bar total-0i";
 
-        parser.parseLine(line);
+        parser.parseLine(line, TimeUnit.NANOSECONDS);
     }
 
     @Test
@@ -225,7 +267,7 @@ public class InfluxParserTest
 
         ImmutableSortedMap<String, String> expectedTags = ImmutableSortedMap.of("host", "localhost");
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
-        ImmutableList<Metric> metrics = parser.parseLine(line);
+        ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
         assertThat(metrics.size(), equalTo(2));
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 1L);
