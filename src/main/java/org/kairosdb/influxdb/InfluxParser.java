@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.kairosdb.core.DataPoint;
+import org.kairosdb.core.annotation.InjectProperty;
 import org.kairosdb.core.datapoints.DoubleDataPoint;
 import org.kairosdb.core.datapoints.LongDataPoint;
 import org.kairosdb.core.datapoints.StringDataPoint;
@@ -20,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Strings.isNullOrEmpty;
 
 /**
  Parses a line of text in the Influxdb line protocol format (https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/)
@@ -38,26 +38,33 @@ public class InfluxParser
 	static final String METRICS_DROPPED_METRIC = "kairosdb.influx.metrics-dropped.count";
 	static final String TAGS_DROPPED_METRIC = "kairosdb.influx.tags-dropped.count";
 
-	private final Set<Pattern> dropMetricsRegex = new HashSet<>();
-	private final Set<Pattern> dropTagsRegex = new HashSet<>();
-	private final MetricWriter writer;
+	private final Set<Pattern> m_dropMetricsRegex = new HashSet<>();
+	private final Set<Pattern> m_dropTagsRegex = new HashSet<>();
+	private final MetricWriter m_writer;
+	private ImmutableSortedMap<String, String> m_hostTag;
 
 	@Inject
 	public InfluxParser(MetricWriter writer)
 	{
-		this.writer = checkNotNull(writer, "writer must not be null");
+		this.m_writer = checkNotNull(writer, "writer must not be null");
 	}
 
-	@Inject(optional = true)
-	public void setupDroppedMetrics(@Named(DROP_METRICS_PROP) String droppedMetrics)
+	@InjectProperty(prop = DROP_METRICS_PROP, optional = true)
+	public void setupDroppedMetrics(@Named(DROP_METRICS_PROP) List<String> droppedMetrics)
 	{
-		createRegexPatterns(droppedMetrics, dropMetricsRegex);
+		createRegexPatterns(droppedMetrics, m_dropMetricsRegex);
 	}
 
-	@Inject(optional = true)
-	public void setupDroppedTags(@Named(DROP_TAGS_PROP) String droppedTags)
+	@Inject
+	public void setHostName(@Named("HOSTNAME") String hostname)
 	{
-		createRegexPatterns(droppedTags, dropTagsRegex);
+		m_hostTag = ImmutableSortedMap.of("host", hostname);
+	}
+
+	@InjectProperty(prop = DROP_TAGS_PROP, optional = true)
+	public void setupDroppedTags(@Named(DROP_TAGS_PROP) List<String> droppedTags)
+	{
+		createRegexPatterns(droppedTags, m_dropTagsRegex);
 	}
 
 	@SuppressWarnings("Convert2MethodRef")
@@ -88,7 +95,7 @@ public class InfluxParser
 			String[] tag = parseComponents(nameAndTags[i], c -> c == '=');
 			Utils.checkParsing(tag.length == 2 && !tag[0].isEmpty() && !tag[1].isEmpty(), "Invalid syntax. Invalid tag set.");
 
-			if (!drop(tag[0], dropTagsRegex))
+			if (!drop(tag[0], m_dropTagsRegex))
 			{
 				builder.put(tag[0], tag[1]);
 			}
@@ -133,7 +140,7 @@ public class InfluxParser
 			Utils.checkParsing(field.length == 2 && !field[0].isEmpty() && !field[1].isEmpty(), "Invalid syntax. Invalid field set.");
 
 			String name = metricName + "." + field[0];
-			if (!drop(name, dropMetricsRegex))
+			if (!drop(name, m_dropMetricsRegex))
 			{
 				metrics.add(new Metric(name, tags, parseValue(timestamp, field[1])));
 			}
@@ -149,11 +156,11 @@ public class InfluxParser
 
 		if (metricsDropped > 0)
 		{
-			writer.write(METRICS_DROPPED_METRIC, new LongDataPoint(System.currentTimeMillis(), metricsDropped));
+			m_writer.write(METRICS_DROPPED_METRIC, m_hostTag, new LongDataPoint(System.currentTimeMillis(), metricsDropped));
 		}
 		if (tagsDropped > 0)
 		{
-			writer.write(TAGS_DROPPED_METRIC, new LongDataPoint(System.currentTimeMillis(), tagsDropped));
+			m_writer.write(TAGS_DROPPED_METRIC, m_hostTag, new LongDataPoint(System.currentTimeMillis(), tagsDropped));
 		}
 
 		return metrics.build();
@@ -230,15 +237,12 @@ public class InfluxParser
 	}
 
 
-	private static void createRegexPatterns(String patterns, Set<Pattern> patternSet)
+	private static void createRegexPatterns(List<String> patterns, Set<Pattern> patternSet)
 	{
-		if (!isNullOrEmpty(patterns))
+		for (String pattern : patterns)
 		{
-			String[] split = patterns.split("\\s*,\\s*");
-			for (String pattern : split)
-			{
-				patternSet.add(Pattern.compile(pattern));
-			}
+			logger.info("Patters: {}", pattern);
+			patternSet.add(Pattern.compile(pattern));
 		}
 	}
 

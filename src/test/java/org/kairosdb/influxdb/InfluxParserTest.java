@@ -14,10 +14,10 @@ import org.kairosdb.events.DataPointEvent;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.*;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
@@ -43,8 +43,9 @@ public class InfluxParserTest
         MockitoAnnotations.initMocks(this);
         when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
         host = "jsabin-desktop";
-        writer = new MetricWriter(mockEventBus, host);
+        writer = new MetricWriter(mockEventBus);
         parser = new InfluxParser(writer);
+        parser.setHostName(host);
     }
 
     @Test
@@ -57,7 +58,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
-        assertThat(metrics.size(), equalTo(4));
+        assertThat(metrics.size()).isEqualTo(4);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
         assertMetric(metrics.get(1), "swap.used", expectedTags, expectedTimestamp, 0L);
         assertMetric(metrics.get(2), "swap.free", expectedTags, expectedTimestamp, "hello");
@@ -74,7 +75,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.SECONDS.toMillis(Long.parseLong("154751015"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.SECONDS);
 
-        assertThat(metrics.size(), equalTo(1));
+        assertThat(metrics.size()).isEqualTo(1);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
     }
 
@@ -88,7 +89,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.parseLong("154751015000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.MICROSECONDS);
 
-        assertThat(metrics.size(), equalTo(1));
+        assertThat(metrics.size()).isEqualTo(1);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
     }
 
@@ -102,7 +103,7 @@ public class InfluxParserTest
         long expectedTimestamp = Long.parseLong("154751015000");
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.MILLISECONDS);
 
-        assertThat(metrics.size(), equalTo(1));
+        assertThat(metrics.size()).isEqualTo(1);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 5L);
     }
 
@@ -116,7 +117,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
-        assertThat(metrics.size(), equalTo(4));
+        assertThat(metrics.size()).isEqualTo(4);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 1L);
         assertMetric(metrics.get(1), "swap.used", expectedTags, expectedTimestamp, 1L);
         assertMetric(metrics.get(2), "swap.free", expectedTags, expectedTimestamp, 0L);
@@ -132,7 +133,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1548718010000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
-        assertThat(metrics.size(), equalTo(1));
+        assertThat(metrics.size()).isEqualTo(1);
         assertMetric(metrics.get(0), "system.uptime_format", expectedTags, expectedTimestamp, "7 days, 5:46");
     }
 
@@ -157,7 +158,7 @@ public class InfluxParserTest
         long expectedTimestamp = System.currentTimeMillis();
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
-        assertThat(metrics.get(0).getDataPoint().getTimestamp(), is(greaterThanOrEqualTo(expectedTimestamp)));
+        assertThat(metrics.get(0).getDataPoint().getTimestamp()).isGreaterThanOrEqualTo(expectedTimestamp);
     }
 
     @Test
@@ -260,8 +261,8 @@ public class InfluxParserTest
     @Test
     public void testDroppedMetricsAndTags() throws ParseException
     {
-        parser.setupDroppedMetrics("swap.used.*");
-        parser.setupDroppedTags("foo");
+        parser.setupDroppedMetrics(Arrays.asList("swap.used.*"));
+        parser.setupDroppedTags(Arrays.asList("foo"));
 
         String line = "swap,host=localhost,foo=bar total=true,used=True,free=f,used_percent=False 1547510150000000000";
 
@@ -269,7 +270,7 @@ public class InfluxParserTest
         long expectedTimestamp = TimeUnit.NANOSECONDS.toMillis(Long.parseLong("1547510150000000000"));
         ImmutableList<Metric> metrics = parser.parseLine(line, TimeUnit.NANOSECONDS);
 
-        assertThat(metrics.size(), equalTo(2));
+        assertThat(metrics.size()).isEqualTo(2);
         assertMetric(metrics.get(0), "swap.total", expectedTags, expectedTimestamp, 1L);
         assertMetric(metrics.get(1), "swap.free", expectedTags, expectedTimestamp, 0L);
         verifyMetric(InfluxParser.TAGS_DROPPED_METRIC, ImmutableSortedMap.of("host", host), 0, 1);
@@ -286,17 +287,17 @@ public class InfluxParserTest
 
     private void assertMetric(Metric actual, String expectedName, ImmutableSortedMap<String, String> expectedTags, long expectedTimestamp, long expectedValue)
     {
-        assertThat(actual.getName(), equalTo(expectedName));
-        assertThat(actual.getTags(), equalTo(expectedTags));
-        assertThat(actual.getDataPoint().getTimestamp(), equalTo(expectedTimestamp));
-        assertThat(actual.getDataPoint().getLongValue(), equalTo(expectedValue));
+        assertThat(actual.getName()).isEqualTo(expectedName);
+        assertThat(actual.getTags()).isEqualTo(expectedTags);
+        assertThat(actual.getDataPoint().getTimestamp()).isEqualTo(expectedTimestamp);
+        assertThat(actual.getDataPoint().getLongValue()).isEqualTo(expectedValue);
     }
 
     private void assertMetric(Metric actual, String expectedName, ImmutableSortedMap<String, String> expectedTags, long expectedTimestamp, String expectedValue)
     {
-        assertThat(actual.getName(), equalTo(expectedName));
-        assertThat(actual.getTags(), equalTo(expectedTags));
-        assertThat(actual.getDataPoint().getTimestamp(), equalTo(expectedTimestamp));
-        assertThat(((StringDataPoint)actual.getDataPoint()).getValue(), equalTo(expectedValue));
+        assertThat(actual.getName()).isEqualTo(expectedName);
+        assertThat(actual.getTags()).isEqualTo(expectedTags);
+        assertThat(actual.getDataPoint().getTimestamp()).isEqualTo(expectedTimestamp);
+        assertThat(((StringDataPoint)actual.getDataPoint()).getValue()).isEqualTo(expectedValue);
     }
 }

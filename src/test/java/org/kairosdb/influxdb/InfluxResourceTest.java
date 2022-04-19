@@ -45,7 +45,7 @@ public class InfluxResourceTest
 		MockitoAnnotations.initMocks(this);
 		when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
 		host = "jsabin-desktop";
-		writer = new MetricWriter(mockEventBus, host);
+		writer = new MetricWriter(mockEventBus);
 		parser = new InfluxParser(writer);
 	}
 
@@ -57,9 +57,11 @@ public class InfluxResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt").openStream();
 
-		InfluxResource resource = new InfluxResource(writer, parser, "influxdb.");
+		InfluxResource resource = new InfluxResource(writer, parser, "influxdb");
+		resource.setHostName(host);
 
-		Response response = resource.write(mockHeaders, "bucket", "org", "ns", inputStream);
+
+		Response response = resource.v1Write(mockHeaders, "db", "ns", inputStream);
 
 		assertThat(response.getStatus(), equalTo(204));
 
@@ -80,9 +82,10 @@ public class InfluxResourceTest
 
 		InputStream inputStream = Resources.getResource("examples.txt.gz").openStream();
 
-		InfluxResource resource = new InfluxResource(writer, parser, "influxdb.");
+		InfluxResource resource = new InfluxResource(writer, parser, "influxdb");
+		resource.setHostName(host);
 
-		Response response = resource.write(mockHeaders, "bucket", "org", "ns",  inputStream);
+		Response response = resource.v1Write(mockHeaders, "db", "ns",  inputStream);
 
 		assertThat(response.getStatus(), equalTo(204));
 

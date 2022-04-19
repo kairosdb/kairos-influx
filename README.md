@@ -1,19 +1,44 @@
 # kairos-influx
 
-This KairosDB plugin takes metrics sent from [Telegraf](https://docs.influxdata.com/telegraf/) in the [InfluxDB Line Protocol format](https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/#syntax) and writes them to KairosDB.
+This KairosDB plugin takes metrics sent from [Telegraf](https://docs.influxdata.com/telegraf/) 
+in the [InfluxDB Line Protocol format](https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/#syntax) 
+and writes them to KairosDB.
 The plugin will accept gzipped and non-gzipped data from Telegraf or any other application that writes data to InfluxDB.
+
+###Influx URL
+The plugin accepts version 1 and 2 of the influx api.  You will set the url to 
+```
+http://kairos-server:8080/api/influx
+```
+Replace kairos-server with your kairos instance domain.
+
+###Bucket or DB
+Depending on what version of the api you tell your client to you Kairos can prepend
+the bucket or db to the metric before storing it.  Otherwise these parameters are ignored
+
+###Precision
+Kairos will honor the precision sent with each api call.
+
+###Other influx parameters
+All other influx parameters are ignored by the plugin at this time.
 
 # Configuration
 Here is a sample configuration for this plugin. 
 
 
 ```
-kairosdb.service.influx=org.kairosdb.influxdb.InfluxModule
-kairosdb.service_folder.influx=lib/influx
+kairosdb: {
+	service.influx: "org.kairosdb.influxdb.InfluxModule"
+	service_folder.influx=lib/telegraf
 
-kairosdb.influx.prefix=telegraph.
-kairosdb.influx.dropMetrics=^swap.used.*$,^kernel.interrupts$
-kairosdb.influx.dropTags=^usage_irq$,^usage_idle$
+	influx: {
+		prefix: "telegraph"
+		metric_separator: "."
+		include_bucket_or_db: true
+		dropMetrics: ["^swap.used.*$", "^kernel.interrupts$"]
+		dropTags: ["^usage_irq$", "^usage_idle$"]
+	}
+}
 ```
 
 These optional properties provide ways to manipulate or restrict the data written to KairosDB.
@@ -22,8 +47,10 @@ These optional properties provide ways to manipulate or restrict the data writte
 | Property                       | Description                                                             |
 |--------------------------------|-------------------------------------------------------------------------|
 | kairosdb.influx.prefix      | Prefix prepended to each metric name. |
-| kairosdb.influx.dropMetrics | This is a comma delimited list of regular expressions. Metric names that match any of the regular expressions are ignored and not added to KairosDB. | 
-| kairosdb.influx.dropTags   | This is a comma delimited list of regular expressions. Tag names that match any of the expressions are not included in metrics written to KairosDB. |
+| kairosdb.influx.metric_separator | String to use to separate portions of a metric name when adding the prefix or bucket names.  Defaults to '.' |
+| kariosdb.influx.include_bucket_or_db | This prepends the bucket or db name (depending on which influx api version you are useing) to the metric name.  This goes after the prefix. (true/false) |
+| kairosdb.influx.dropMetrics | This is a list of regular expressions. Metric names that match any of the regular expressions are ignored and not added to KairosDB. | 
+| kairosdb.influx.dropTags   | This is a list of regular expressions. Tag names that match any of the expressions are not included in metrics written to KairosDB. |
 
 
 The optional prefix property adds the prefix string to the beginning of each metric name. 
