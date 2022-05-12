@@ -1,25 +1,25 @@
 # kairos-influx
 
-This KairosDB plugin takes metrics sent from [Telegraf](https://docs.influxdata.com/telegraf/) 
-in the [InfluxDB Line Protocol format](https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/#syntax) 
+This KairosDB plugin takes metrics sent in the 
+[InfluxDB Line Protocol format](https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/#syntax) 
 and writes them to KairosDB.
 The plugin will accept gzipped and non-gzipped data from Telegraf or any other application that writes data to InfluxDB.
 
-###Influx URL
+### Influx URL
 The plugin accepts version 1 and 2 of the influx api.  You will set the url to 
 ```
 http://kairos-server:8080/api/influx
 ```
 Replace kairos-server with your kairos instance domain.
 
-###Bucket or DB
-Depending on what version of the api you tell your client to you Kairos can prepend
+### Bucket or DB
+Depending on what version of the api you are using, Kairos can prepend
 the bucket or db to the metric before storing it.  Otherwise these parameters are ignored
 
-###Precision
+### Precision
 Kairos will honor the precision sent with each api call.
 
-###Other influx parameters
+### Other influx parameters
 All other influx parameters are ignored by the plugin at this time.
 
 # Configuration
@@ -29,10 +29,10 @@ Here is a sample configuration for this plugin.
 ```
 kairosdb: {
 	service.influx: "org.kairosdb.influxdb.InfluxModule"
-	service_folder.influx=lib/telegraf
+	service_folder.influx=lib/influx_plugin
 
 	influx: {
-		prefix: "telegraph"
+		prefix: "telegraph."
 		metric_separator: "."
 		include_bucket_or_db: true
 		dropMetrics: ["^swap.used.*$", "^kernel.interrupts$"]
@@ -52,8 +52,7 @@ These optional properties provide ways to manipulate or restrict the data writte
 | kairosdb.influx.dropMetrics | This is a list of regular expressions. Metric names that match any of the regular expressions are ignored and not added to KairosDB. | 
 | kairosdb.influx.dropTags   | This is a list of regular expressions. Tag names that match any of the expressions are not included in metrics written to KairosDB. |
 
-
-The optional prefix property adds the prefix string to the beginning of each metric name. 
+ 
 
 # Internal Metrics
 The plugin writes these metrics to KairosDB:
