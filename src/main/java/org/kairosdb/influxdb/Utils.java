@@ -6,7 +6,7 @@ public class Utils
 			throws ParseException
 	{
 		if (!condition) {
-			throw new ParseException(String.valueOf(errorMessage));
+			throw new ParseException(errorMessage);
 		}
 	}
 }

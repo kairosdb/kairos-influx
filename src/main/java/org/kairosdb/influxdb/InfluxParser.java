@@ -13,14 +13,19 @@ import org.kairosdb.core.datapoints.StringDataPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.CharacterIterator;
+import java.text.StringCharacterIterator;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.kairosdb.influxdb.InfluxResource.BUCKET_TAG_PROP;
+import static org.kairosdb.influxdb.InfluxResource.INCLUDE_BUCKET_PROP;
 
 /**
  Parses a line of text in the Influxdb line protocol format (https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/)
@@ -42,6 +47,14 @@ public class InfluxParser
 	private final Set<Pattern> m_dropTagsRegex = new HashSet<>();
 	private final MetricWriter m_writer;
 	private ImmutableSortedMap<String, String> m_hostTag;
+
+	@Inject(optional = true)
+	@Named(INCLUDE_BUCKET_PROP)
+	private boolean m_useBucket;
+
+	@Inject(optional = true)
+	@Named(BUCKET_TAG_PROP)
+	private String m_bucketTag;
 
 	@Inject
 	public InfluxParser(MetricWriter writer)
@@ -67,8 +80,9 @@ public class InfluxParser
 		createRegexPatterns(droppedTags, m_dropTagsRegex);
 	}
 
-	@SuppressWarnings("Convert2MethodRef")
-	public ImmutableList<Metric> parseLine(String line, TimeUnit precision)
+
+
+	public ImmutableList<Metric> parseLine(String line, TimeUnit precision, String bucket)
 			throws ParseException
 	{
 		int metricsDropped = 0;
@@ -76,73 +90,115 @@ public class InfluxParser
 
 		Builder<Metric> metrics = ImmutableList.builder();
 
-		String[] strings = parseComponents(line, c -> Character.isWhitespace(c));
-		if (strings.length < 1)
+		Tokenizer tokenizer = new Tokenizer(line);
+		String metricName = tokenizer.getString();
+		Utils.checkParsing(!metricName.isEmpty(), "Invalid syntax. Measurement name was not specified.");
+		//check errors
+
+
+		ImmutableSortedMap.Builder<String, String> tagBuilder = ImmutableSortedMap.naturalOrder();
+		if (tokenizer.getChar() == ',')
 		{
-			return ImmutableList.of();
-		}
-		Utils.checkParsing(strings.length >= 2, "Invalid syntax. Measurement name and field set is required.");
+			//parse out some tags
 
-		// Parse metric name from tags
-		String[] nameAndTags = strings[0].split(",");
-		Utils.checkParsing(nameAndTags.length > 0 && !nameAndTags[0].isEmpty(), "Invalid syntax. Measurement name was not specified.");
-		String metricName = nameAndTags[0];
-
-		// Parse tags
-		ImmutableSortedMap.Builder<String, String> builder = ImmutableSortedMap.naturalOrder();
-		for (int i = 1; i < nameAndTags.length; i++)
-		{
-			String[] tag = parseComponents(nameAndTags[i], c -> c == '=');
-			Utils.checkParsing(tag.length == 2 && !tag[0].isEmpty() && !tag[1].isEmpty(), "Invalid syntax. Invalid tag set.");
-
-			if (!drop(tag[0], m_dropTagsRegex))
+			while (!Character.isWhitespace(tokenizer.getChar()))
 			{
-				builder.put(tag[0], tag[1]);
-			}
-			else
-			{
-				tagsDropped++;
-				if (logger.isDebugEnabled())
+				tokenizer.next();
+				Utils.checkParsing(tokenizer.getChar() == '=', "Invalid syntax. Invalid tag set.");
+
+				String tagName = tokenizer.getString();
+
+				tokenizer.next();
+				Utils.checkParsing(
+						tokenizer.getChar() == ',' || Character.isWhitespace(tokenizer.getChar()),
+						"Invalid syntax. Invalid tag set.");
+
+				String tagValue = tokenizer.getString();
+
+				Utils.checkParsing(!tagName.isEmpty() && !tagValue.isEmpty(), "Invalid syntax. Invalid tag set.");
+
+				if (!drop(tagName, m_dropTagsRegex))
 				{
-					logger.debug("Tag {} was dropped because it matched the drop tag regex for metric {}", tag[0], metricName);
+					tagBuilder.put(tagName, tagValue);
 				}
+				else
+				{
+					tagsDropped++;
+					if (logger.isDebugEnabled())
+					{
+						logger.debug("Tag {} was dropped because it matched the drop tag regex for metric {}", tagName, metricName);
+					}
+				}
+
 			}
 		}
-		ImmutableSortedMap<String, String> tags = builder.build();
+
+		if (m_useBucket && m_bucketTag != null)
+		{
+			tagBuilder.put(m_bucketTag, bucket);
+		}
+
+		ImmutableSortedMap<String, String> tags = tagBuilder.build();
+
+		ImmutableSortedMap.Builder<String, String> fieldBuilder = ImmutableSortedMap.naturalOrder();
+
+		do
+		{
+			tokenizer.next();
+			Utils.checkParsing(tokenizer.getChar() == '=', "Invalid syntax. Invalid field set.");
+
+			String fieldName = tokenizer.getString();
+
+			tokenizer.next();
+			Utils.checkParsing(
+					tokenizer.getChar() == ',' || Character.isWhitespace(tokenizer.getChar()) || tokenizer.getChar() == CharacterIterator.DONE,
+					"Invalid syntax. Invalid field set.");
+
+			String fieldValue = tokenizer.getString();
+
+			Utils.checkParsing(!fieldName.isEmpty() && !fieldValue.isEmpty(), "Invalid syntax. Invalid field set.");
+			fieldBuilder.put(fieldName, fieldValue);
+
+		} while (!Character.isWhitespace(tokenizer.getChar()) && tokenizer.getChar() != CharacterIterator.DONE);
+
+		ImmutableSortedMap<String, String> fields = fieldBuilder.build();
 
 		// Timestamp
 		long timestamp = System.currentTimeMillis();
-		if (strings.length == 3)
+
+		if (tokenizer.getChar() != CharacterIterator.DONE)
 		{
-			long parsedTime = Long.parseLong(strings[2]);
-			switch (precision)
+			tokenizer.next();
+			String timestampStr = tokenizer.getString();
+
+			if (!timestampStr.isEmpty())
 			{
-				case NANOSECONDS:
-					timestamp = TimeUnit.NANOSECONDS.toMillis(parsedTime);
-					break;
-				case MICROSECONDS:
-					timestamp = TimeUnit.MICROSECONDS.toMillis(parsedTime);
-					break;
-				case MILLISECONDS:
-					timestamp = parsedTime;
-					break;
-				case SECONDS:
-					timestamp = TimeUnit.SECONDS.toMillis(parsedTime);
-					break;
+				long parsedTime = Long.parseLong(timestampStr);
+				switch (precision)
+				{
+					case NANOSECONDS:
+						timestamp = TimeUnit.NANOSECONDS.toMillis(parsedTime);
+						break;
+					case MICROSECONDS:
+						timestamp = TimeUnit.MICROSECONDS.toMillis(parsedTime);
+						break;
+					case MILLISECONDS:
+						timestamp = parsedTime;
+						break;
+					case SECONDS:
+						timestamp = TimeUnit.SECONDS.toMillis(parsedTime);
+						break;
+				}
 			}
 		}
 
-		// Parse Field set
-		String[] fieldSets = parseComponents(strings[1], c -> c == ',');
-		for (String fieldSet : fieldSets)
-		{
-			String[] field = parseComponents(fieldSet, c -> c == '=');
-			Utils.checkParsing(field.length == 2 && !field[0].isEmpty() && !field[1].isEmpty(), "Invalid syntax. Invalid field set.");
 
-			String name = metricName + "." + field[0];
+		for (Map.Entry<String, String> fieldEntry : fields.entrySet())
+		{
+			String name = metricName + "." + fieldEntry.getKey();
 			if (!drop(name, m_dropMetricsRegex))
 			{
-				metrics.add(new Metric(name, tags, parseValue(timestamp, field[1])));
+				metrics.add(new Metric(name, tags, parseValue(timestamp, fieldEntry.getValue())));
 			}
 			else
 			{
@@ -164,47 +220,8 @@ public class InfluxParser
 		}
 
 		return metrics.build();
-
 	}
 
-	private String[] parseComponents(String line, Delimiter delimeter)
-			throws ParseException
-	{
-		List<String> components = new ArrayList<>();
-		String trimmedLine = line.trim();
-		StringBuilder builder = new StringBuilder();
-		boolean startQuote = false;
-		for (char c : trimmedLine.toCharArray())
-		{
-			if (c == '"')
-			{
-				startQuote = !startQuote;
-			}
-			if (delimeter.isDelimeter(c) && !startQuote)
-			{
-				if (builder.length() > 0)
-				{
-					// End of component
-					components.add(builder.toString());
-					builder = new StringBuilder();
-				}
-			}
-			else
-			{
-				builder.append(c);
-			}
-		}
-
-		if (startQuote)
-		{
-			throw new ParseException("Invalid syntax: unterminated double quote");
-		}
-		else if (builder.length() > 0)
-		{
-			components.add(builder.toString());
-		}
-		return components.toArray(new String[0]);
-	}
 
 	private DataPoint parseValue(long timestamp, String valueString) throws ParseException
 	{
@@ -231,17 +248,13 @@ public class InfluxParser
 		}
 	}
 
-	private interface Delimiter
-	{
-		boolean isDelimeter(char c);
-	}
 
 
 	private static void createRegexPatterns(List<String> patterns, Set<Pattern> patternSet)
 	{
 		for (String pattern : patterns)
 		{
-			logger.info("Patters: {}", pattern);
+			logger.info("Pattern: {}", pattern);
 			patternSet.add(Pattern.compile(pattern));
 		}
 	}

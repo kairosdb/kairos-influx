@@ -34,6 +34,7 @@ public class InfluxResource
 	public static final String PREFIX_PROP = "kairosdb.influx.prefix";
 	public static final String SEPARATOR_PROP = "kairosdb.influx.metric_separator";
 	public static final String INCLUDE_BUCKET_PROP = "kairosdb.influx.include_bucket_or_db";
+	public static final String BUCKET_TAG_PROP = "kairosdb.influx.bucket_tag";
 
 	public static final String INGESTION_COUNT_METRIC = "kairosdb.influx.ingest_count";
 	public static final String EXCEPTIONS_METRIC = "kairosdb.influx.exception_count";
@@ -52,6 +53,10 @@ public class InfluxResource
 	@Inject(optional = true)
 	@Named(INCLUDE_BUCKET_PROP)
 	private boolean m_useBucket;
+
+	@Inject(optional = true)
+	@Named(BUCKET_TAG_PROP)
+	private String m_bucketTag;
 
 	private String m_hostName = "localhost";
 
@@ -105,7 +110,7 @@ public class InfluxResource
 			sb.append(m_metricSeparator);
 		}
 
-		if (m_useBucket)
+		if (m_useBucket && m_bucketTag == null)
 		{
 			sb.append(bucketOrDB).append(m_metricSeparator);
 		}
@@ -129,7 +134,7 @@ public class InfluxResource
 	{
 		logger.debug("precision: {} db: {} ", precision, database);
 
-		return writeInternal(getPrefix(database), httpheaders, precision, stream);
+		return writeInternal(database, httpheaders, precision, stream);
 	}
 
 	@SuppressWarnings("UnstableApiUsage")
@@ -148,11 +153,11 @@ public class InfluxResource
 	{
 		logger.debug("precision: {} bucket: {}", precision, bucket);
 
-		return writeInternal(getPrefix(bucket), httpheaders, precision, stream);
+		return writeInternal(bucket, httpheaders, precision, stream);
 	}
 
 
-	private Response writeInternal(String metricPrefix, HttpHeaders httpheaders, String precision, InputStream stream) throws IOException
+	private Response writeInternal(String bucket, HttpHeaders httpheaders, String precision, InputStream stream) throws IOException
 	{
 		List<String> requestHeader = httpheaders.getRequestHeader("Content-Encoding");
 		if (requestHeader != null && requestHeader.contains("gzip"))
@@ -183,13 +188,17 @@ public class InfluxResource
 			String[] lines = data.split("\n");
 			for (String line : lines)
 			{
+				logger.debug(line);
 				try
 				{
-					ImmutableList<Metric> metrics = m_parser.parseLine(line, timePrecision);
-					for (Metric metric : metrics)
+					if (!line.isEmpty())
 					{
-						publishMetric(metricPrefix, metric);
-						success++;
+						ImmutableList<Metric> metrics = m_parser.parseLine(line, timePrecision, bucket);
+						for (Metric metric : metrics)
+						{
+							publishMetric(getPrefix(bucket), metric);
+							success++;
+						}
 					}
 				}
 				catch (ParseException e)
