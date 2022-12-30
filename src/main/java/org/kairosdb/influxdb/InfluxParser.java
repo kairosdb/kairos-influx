@@ -10,6 +10,7 @@ import org.kairosdb.core.annotation.InjectProperty;
 import org.kairosdb.core.datapoints.DoubleDataPoint;
 import org.kairosdb.core.datapoints.LongDataPoint;
 import org.kairosdb.core.datapoints.StringDataPoint;
+import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,17 +37,16 @@ import static org.kairosdb.influxdb.InfluxResource.INCLUDE_BUCKET_PROP;
 public class InfluxParser
 {
 	private static final Logger logger = LoggerFactory.getLogger(InfluxParser.class);
+	private static final InfluxStats stats = MetricSourceManager.getSource(InfluxStats.class);
 
 	private static final String DROP_METRICS_PROP = "kairosdb.influx.dropMetrics";
 	private static final String DROP_TAGS_PROP = "kairosdb.influx.dropTags";
 
-	static final String METRICS_DROPPED_METRIC = "kairosdb.influx.metrics-dropped.count";
-	static final String TAGS_DROPPED_METRIC = "kairosdb.influx.tags-dropped.count";
+	//static final String METRICS_DROPPED_METRIC = "kairosdb.influx.metrics-dropped.count";
+	//static final String TAGS_DROPPED_METRIC = "kairosdb.influx.tags-dropped.count";
 
 	private final Set<Pattern> m_dropMetricsRegex = new HashSet<>();
 	private final Set<Pattern> m_dropTagsRegex = new HashSet<>();
-	private final MetricWriter m_writer;
-	private ImmutableSortedMap<String, String> m_hostTag;
 
 	@Inject(optional = true)
 	@Named(INCLUDE_BUCKET_PROP)
@@ -56,22 +56,11 @@ public class InfluxParser
 	@Named(BUCKET_TAG_PROP)
 	private String m_bucketTag;
 
-	@Inject
-	public InfluxParser(MetricWriter writer)
-	{
-		this.m_writer = checkNotNull(writer, "writer must not be null");
-	}
 
 	@InjectProperty(prop = DROP_METRICS_PROP, optional = true)
 	public void setupDroppedMetrics(@Named(DROP_METRICS_PROP) List<String> droppedMetrics)
 	{
 		createRegexPatterns(droppedMetrics, m_dropMetricsRegex);
-	}
-
-	@Inject
-	public void setHostName(@Named("HOSTNAME") String hostname)
-	{
-		m_hostTag = ImmutableSortedMap.of("host", hostname);
 	}
 
 	@InjectProperty(prop = DROP_TAGS_PROP, optional = true)
@@ -212,11 +201,11 @@ public class InfluxParser
 
 		if (metricsDropped > 0)
 		{
-			m_writer.write(METRICS_DROPPED_METRIC, m_hostTag, new LongDataPoint(System.currentTimeMillis(), metricsDropped));
+			stats.metricsDropped().put(metricsDropped);
 		}
 		if (tagsDropped > 0)
 		{
-			m_writer.write(TAGS_DROPPED_METRIC, m_hostTag, new LongDataPoint(System.currentTimeMillis(), tagsDropped));
+			stats.tagsDropped().put(tagsDropped);
 		}
 
 		return metrics.build();

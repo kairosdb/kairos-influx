@@ -7,6 +7,7 @@ import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.apache.commons.lang3.StringUtils;
 import org.kairosdb.core.datapoints.LongDataPoint;
+import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 public class InfluxResource
 {
 	private static final Logger logger = LoggerFactory.getLogger(InfluxResource.class);
+	private static final InfluxStats stats = MetricSourceManager.getSource(InfluxStats.class);
 
 	public static final String PREFIX_PROP = "kairosdb.influx.prefix";
 	public static final String SEPARATOR_PROP = "kairosdb.influx.metric_separator";
@@ -207,14 +209,16 @@ public class InfluxResource
 					String msg = "Failed to parse '" + line + "' because " + e.getMessage();
 					logger.error(msg);
 					errors.add(msg);
-					publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
+					//publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
+					stats.exception(e.getMessage()).put(1);
 				}
 			}
 		}
 		catch (Throwable e)
 		{
 			logger.error("Error processing request: " + data, e);
-			publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
+			stats.exception(e.getMessage()).put(1);
+			//publishInternalMetric(EXCEPTIONS_METRIC, 1, "exception", e.getMessage());
 
 			String errorMessage = "{\"code\": \"internal error\", \"message\": \"" + StringUtils.join(errors, ";") + "\"}";
 			Response.ResponseBuilder response = Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage);
@@ -222,9 +226,11 @@ public class InfluxResource
 			return response.build();
 		}
 
-		publishInternalMetric(INGESTION_COUNT_METRIC, success, failed);
+		//publishInternalMetric(INGESTION_COUNT_METRIC, success, failed);
+		stats.ingest("success").put(success);
 		if (failed != 0)
 		{
+			stats.ingest("failed").put(failed);
 			String errorMessage = "{\"code\": \"invalid\", \"message\": \"partial write error (" + success + " written): " + StringUtils.join(errors, ";") + "\"}";
 			Response.ResponseBuilder response = Response.status(Response.Status.BAD_REQUEST).entity(errorMessage);
 			response.header("Content-Type", "application/json;charset=utf-8");
@@ -244,21 +250,4 @@ public class InfluxResource
 		m_writer.write(metricNameBuilder.toString(), metric.getTags(), metric.getDataPoint());
 	}
 
-	private void publishInternalMetric(String metricName, int success, int failed)
-	{
-		publishInternalMetric(metricName, success, "status", "success");
-
-		if (failed > 0)
-		{
-			publishInternalMetric(metricName, failed, "status", "failed");
-		}
-	}
-
-	private void publishInternalMetric(String metricName, long value, String tagName, String tagValue)
-	{
-		ImmutableSortedMap.Builder<String, String> builder = ImmutableSortedMap.naturalOrder();
-		builder.put(tagName, tagValue);
-		builder.put("host", m_hostName);
-		m_writer.write(metricName, builder.build(), new LongDataPoint(System.currentTimeMillis(), value));
-	}
 }

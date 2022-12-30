@@ -11,6 +11,8 @@ import org.kairosdb.core.datapoints.StringDataPoint;
 import org.kairosdb.eventbus.FilterEventBus;
 import org.kairosdb.eventbus.Publisher;
 import org.kairosdb.events.DataPointEvent;
+import org.kairosdb.metrics4j.MetricSourceManager;
+import org.kairosdb.metrics4j.collectors.LongCollector;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -21,8 +23,7 @@ import java.io.InputStream;
 import java.net.UnknownHostException;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -46,13 +47,16 @@ public class InfluxResourceTest
 		when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
 		host = "jsabin-desktop";
 		writer = new MetricWriter(mockEventBus);
-		parser = new InfluxParser(writer);
+		parser = new InfluxParser();
 	}
 
 	@SuppressWarnings("UnstableApiUsage")
 	@Test
 	public void test() throws IOException
 	{
+		LongCollector ingestCount = mock(LongCollector.class);
+		MetricSourceManager.setCollectorForSource(ingestCount, InfluxStats.class).ingest("success");
+
 		when(mockHeaders.getRequestHeader("Content-Encoding")).thenReturn(null);
 
 		InputStream inputStream = Resources.getResource("examples.txt").openStream();
@@ -63,7 +67,7 @@ public class InfluxResourceTest
 
 		Response response = resource.v1Write(mockHeaders, "db", "ns", inputStream);
 
-		assertThat(response.getStatus(), equalTo(204));
+		assertThat(response.getStatus()).isEqualTo(204);
 
 		// Verify a few metrics created
 		verifyMetric("influxdb.mem.total", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, 16773103616L);
@@ -71,13 +75,15 @@ public class InfluxResourceTest
 		verifyMetric("influxdb.system.uptime_format", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, " 5:53");
 
 		// Verify internal metric
-		verifyMetric("kairosdb.influx.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
+		verify(ingestCount).put(211);
 	}
 
 	@SuppressWarnings("UnstableApiUsage")
 	@Test
 	public void testGzippedContent() throws IOException
 	{
+		LongCollector ingestCount = mock(LongCollector.class);
+		MetricSourceManager.setCollectorForSource(ingestCount, InfluxStats.class).ingest("success");
 		when(mockHeaders.getRequestHeader("Content-Encoding")).thenReturn(ImmutableList.of("gzip"));
 
 		InputStream inputStream = Resources.getResource("examples.txt.gz").openStream();
@@ -87,7 +93,7 @@ public class InfluxResourceTest
 
 		Response response = resource.v1Write(mockHeaders, "db", "ns",  inputStream);
 
-		assertThat(response.getStatus(), equalTo(204));
+		assertThat(response.getStatus()).isEqualTo(204);
 
 		// Verify a few metrics created
 		verifyMetric("influxdb.mem.total", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, 16773103616L);
@@ -95,7 +101,7 @@ public class InfluxResourceTest
 		verifyMetric("influxdb.system.uptime_format", ImmutableSortedMap.of("host", "jsabin-desktop"), 1547510150000000000L, " 5:53");
 
 		// Verify internal metric
-		verifyMetric("kairosdb.influx.ingest_count", ImmutableSortedMap.of("host", host, "status", "success"), 1547510150000000000L, 211);
+		verify(ingestCount).put(211);
 	}
 
 	private void verifyMetric(String metricName, ImmutableSortedMap<String, String> tags, long timestamp, long value)

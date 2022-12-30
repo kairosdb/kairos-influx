@@ -26,18 +26,18 @@ All other influx parameters are ignored by the plugin at this time.
 Here is a sample configuration for this plugin. 
 
 
-```
+```hocon
 kairosdb: {
-	service.influx: "org.kairosdb.influxdb.InfluxModule"
-	service_folder.influx=lib/influx_plugin
+  service.influx: "org.kairosdb.influxdb.InfluxModule"
+  service_folder.influx=lib/influx_plugin
 
-	influx: {
-		prefix: "telegraph."
-		metric_separator: "."
-		include_bucket_or_db: true
-		dropMetrics: ["^swap.used.*$", "^kernel.interrupts$"]
-		dropTags: ["^usage_irq$", "^usage_idle$"]
-	}
+  influx: {
+    prefix: "telegraph."
+    metric_separator: "."
+    include_bucket_or_db: true
+    dropMetrics: ["^swap.used.*$", "^kernel.interrupts$"]
+    dropTags: ["^usage_irq$", "^usage_idle$"]
+  }
 }
 ```
 
@@ -55,11 +55,38 @@ These optional properties provide ways to manipulate or restrict the data writte
  
 
 # Internal Metrics
-The plugin writes these metrics to KairosDB:
+The plugin writes these metrics to Metrics4j (host tag is typically added by kairosdb but can be turned off in the metrics4j.conf file):
 
 | Metric Name | Tags | Description |
 | ----------- | ---- | ----------- |
-| kairosdb.influx.ingest_count | status, host | This is the number of metrics ingested from Telegraf. Status is either "success" or "failed". Host is the name of the KairosDB host that reported the metric. |
-| kairosdb.influx.exception_count | exception, host | This is a count of exceptions when ingesting. The exception tag is the exception name. Host is the name of the KairosDB host that reported the metric. | 
+| kairosdb.influx.ingest.count | status, host | This is the number of metrics ingested from Telegraf. Status is either "success" or "failed". Host is the name of the KairosDB host that reported the metric. |
+| kairosdb.influx.exception.count | exception, host | This is a count of exceptions when ingesting. The exception tag is the exception name. Host is the name of the KairosDB host that reported the metric. | 
 | kairosdb.influx.metrics-dropped.count | host | This is a count of the number of metrics (measurement + field name) dropped (ignored). Host is the name of the KairosDB host that reported the metric. |
 | kairosdb.influx.tags-dropped.count | host | This is a count of the number of tags dropped (ignored). Host is the name of the KairosDB host that reported the metric.|
+
+Sample metrics4j conf file.  The source can be added to your KairosDB deployment metrics4j.conf file.
+```hocon
+metrics4j: {  
+  sources: {
+    org.kairosdb.influxdb.InfluxStats: {
+      _formatter: "influxFormatter"
+      _collector: ["counter"]
+    }
+  }
+  
+  collectors: {
+    counter: {
+      _class: "org.kairosdb.metrics4j.collectors.impl.LongCounter"
+      reset: true
+      report-zero: false
+    }
+  }
+  
+  formatters: {
+    influxFormatter: {
+      _class: "org.kairosdb.metrics4j.formatters.MethodToSnakeCase"
+      template: "kairosdb.influx.%{metricName}.%{field}"
+    }
+  }
+}
+```

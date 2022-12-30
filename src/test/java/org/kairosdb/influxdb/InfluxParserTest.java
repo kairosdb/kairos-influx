@@ -6,11 +6,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.kairosdb.core.datapoints.LongDataPoint;
 import org.kairosdb.core.datapoints.StringDataPoint;
 import org.kairosdb.eventbus.FilterEventBus;
 import org.kairosdb.eventbus.Publisher;
 import org.kairosdb.events.DataPointEvent;
+import org.kairosdb.metrics4j.MetricSourceManager;
+import org.kairosdb.metrics4j.collectors.LongCollector;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -20,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,8 +46,7 @@ public class InfluxParserTest
         when(mockEventBus.<DataPointEvent>createPublisher(any())).thenReturn(mockPublisher);
         host = "jsabin-desktop";
         writer = new MetricWriter(mockEventBus);
-        parser = new InfluxParser(writer);
-        parser.setHostName(host);
+        parser = new InfluxParser();
     }
 
     @Test
@@ -317,6 +317,12 @@ public class InfluxParserTest
     @Test
     public void testDroppedMetricsAndTags() throws ParseException
     {
+        LongCollector metricsDropped = mock(LongCollector.class);
+        LongCollector tagsDropped = mock(LongCollector.class);
+
+        MetricSourceManager.setCollectorForSource(metricsDropped, InfluxStats.class).metricsDropped();
+        MetricSourceManager.setCollectorForSource(tagsDropped, InfluxStats.class).tagsDropped();
+
         parser.setupDroppedMetrics(Arrays.asList("swap.used.*"));
         parser.setupDroppedTags(Arrays.asList("foo"));
 
@@ -329,16 +335,8 @@ public class InfluxParserTest
         assertThat(metrics.size()).isEqualTo(2);
         assertMetric(metrics.get(1), "swap.total", expectedTags, expectedTimestamp, 1L);
         assertMetric(metrics.get(0), "swap.free", expectedTags, expectedTimestamp, 0L);
-        verifyMetric(InfluxParser.TAGS_DROPPED_METRIC, ImmutableSortedMap.of("host", host), 0, 1);
-        verifyMetric(InfluxParser.METRICS_DROPPED_METRIC, ImmutableSortedMap.of("host", host), 0, 2);
-    }
-
-    private void verifyMetric(String metricName, ImmutableSortedMap<String, String> tags, long timestamp, long value)
-    {
-        verify(mockPublisher).post(
-              argThat(new DataPointEventMatcher(new DataPointEvent(metricName,
-                    tags,
-                    new LongDataPoint(TimeUnit.NANOSECONDS.toMillis(timestamp), value)))));
+        verify(metricsDropped).put(2);
+        verify(tagsDropped).put(1);
     }
 
     private void assertMetric(Metric actual, String expectedName, ImmutableSortedMap<String, String> expectedTags, long expectedTimestamp, long expectedValue)
