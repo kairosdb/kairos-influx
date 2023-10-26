@@ -215,7 +215,7 @@ public class InfluxParser
 	private DataPoint parseValue(long timestamp, String valueString) throws ParseException
 	{
 		try {
-			if (valueString.endsWith("i")) {
+			if (valueString.endsWith("i") || (valueString.endsWith("u"))) {
 				String value = valueString.substring(0, valueString.length() - 1);
 				return new LongDataPoint(timestamp, Long.parseLong(value));
 			}

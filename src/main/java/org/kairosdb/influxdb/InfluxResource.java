@@ -81,6 +81,13 @@ public class InfluxResource
 		this.m_metricPrefix = metricPrefix;
 	}
 
+	@GET
+	@Path("/health")
+	public Response health()
+	{
+		return queryInternal();
+	}
+
 	@POST
 	@Path("/query")
 	public Response v1Query()

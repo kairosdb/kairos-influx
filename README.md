@@ -6,11 +6,23 @@ and writes them to KairosDB.
 The plugin will accept gzipped and non-gzipped data from Telegraf or any other application that writes data to InfluxDB.
 
 ### Influx URL
-The plugin accepts version 1 and 2 of the influx api.  You will set the url to 
+The plugin accepts version 1 and 2 of the influx api.  You will set the base url to 
 ```
 http://kairos-server:8080/api/influx
 ```
 Replace kairos-server with your kairos instance domain.
+
+For V1 the client needs to send data to
+```
+http://kairos-server:8080/api/influx/write
+```
+
+For V2 the client needs to send data to
+```
+http://kairos-server:8080/api/influx/api/v2/write
+```
+
+Every client I've tried seems to do it a little different, so you may have to play with the client settings to get it to work.
 
 ### Bucket or DB
 Depending on what version of the api you are using, Kairos can prepend
