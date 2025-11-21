@@ -3,6 +3,8 @@ package org.kairosdb.influxdb;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.io.Resources;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
 import org.junit.Before;
 import org.junit.Test;
 import org.kairosdb.core.datapoints.DoubleDataPoint;
@@ -16,8 +18,6 @@ import org.kairosdb.metrics4j.collectors.LongCollector;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.UnknownHostException;

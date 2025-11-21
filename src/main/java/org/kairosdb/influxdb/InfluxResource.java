@@ -1,21 +1,24 @@
 package org.kairosdb.influxdb;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.io.CharStreams;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.apache.commons.lang3.StringUtils;
-import org.kairosdb.core.datapoints.LongDataPoint;
 import org.kairosdb.metrics4j.MetricSourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.*;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -25,13 +28,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Strings.isNullOrEmpty;
 
 @Path("api/influx")
 public class InfluxResource
 {
 	private static final Logger logger = LoggerFactory.getLogger(InfluxResource.class);
 	private static final InfluxStats stats = MetricSourceManager.getSource(InfluxStats.class);
+	public static final String INFLUX_VERSION = "1.5.1";
 
 	public static final String PREFIX_PROP = "kairosdb.influx.prefix";
 	public static final String SEPARATOR_PROP = "kairosdb.influx.metric_separator";
@@ -93,6 +96,15 @@ public class InfluxResource
 	public Response v1Query()
 	{
 		return queryInternal();
+	}
+
+	@GET
+	@Path("/ping")
+	public Response ping()
+	{
+		Response.ResponseBuilder responseBuilder = Response.noContent();
+		responseBuilder.header("X-Influxdb-Version", INFLUX_VERSION);
+		return responseBuilder.build();
 	}
 
 	@POST
